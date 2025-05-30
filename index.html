@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dancing in the dảk</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: black;
+        }
+        #info-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255, 77, 77, 0.8), rgba(255, 255, 255, 0.3));
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-family: 'Arial', sans-serif;
+            z-index: 1000;
+        }
+        #info-screen h1 {
+            font-size: 2em;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+        #info-screen p {
+            font-size: 1em;
+            margin: 8px;
+            text-shadow: 0 0 5px rgba(255, 77, 77, 0.8);
+        }
+        #start-button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            background: #ff4d4d;
+            color: white;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(255, 77, 77, 0.7);
+        }
+        #start-button:hover {
+            background: #ff6666;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.9);
+        }
+        canvas {
+            display: block;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        #start-button {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="info-screen">
+        <h1>Dancing in the dảk</h1>
+        <p><strong>Điều khiển máy tính:</strong></p>
+        <p>Chuột: Xoay góc nhìn</p>
+        <p>W/A/S/D: Di chuyển</p>
+        <p>Shift: Bay suống</p>
+        <p>Space: Bay lên</p>
+        <p>ESC: Thoát</p>
+        <p><strong>Điều khiển điện thoại:</strong></p>
+        <p>Vuốt: Xoay chế độ xem</p>
+        <p>Chụm: Thu phóng</p>
+        <p>Kéo: Di chuyển</p>
+        <button id="start-button">Click</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/geometries/TextGeometry.js"></script>
+    <script>
+        let scene, camera, renderer, controls;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let prevTime = performance.now();
+        let particles = [];
+        let texts = [];
+        let dustParticles = [];
+        let isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        let touchStartX, touchStartY, moveStartX, moveStartY, touchStartDistance;
+        let isDragging = false;
+        let lastParticleTime = 0;
+        const romanticWords = [
+            'I', 'LOVE', 'YOU',
+        ];
+        let font = null;
+        const maxParticles = 400; // Giảm nửa
+        const maxTexts = 500; // Tăng gấp 5
+        const maxDustGroups = 20;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.sortObjects = true;
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 1.5, 100);
+            pointLight.position.set(10, 10, 10);
+            scene.add(pointLight);
+
+            controls = new THREE.PointerLockControls(camera, renderer.domElement);
+            controls.enabled = false;
+
+            controls.addEventListener('unlock', () => {
+                document.getElementById('info-screen').style.display = 'flex';
+                controls.enabled = false;
+            });
+
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', function (loadedFont) {
+                font = loadedFont;
+                const mainTexts = ['I', 'LOVE', 'YOU'];
+                mainTexts.forEach((text, index) => {
+                    const geometry = new THREE.TextGeometry(text, {
+                        font: font,
+                        size: 2.0,
+                        height: 0.2,
+                        curveSegments: 12,
+                        bevelEnabled: true,
+                        bevelThickness: 0.04,
+                        bevelSize: 0.04,
+                        bevelOffset: 0,
+                        bevelSegments: 5
+                    });
+                    const material = new THREE.MeshPhongMaterial({
+                        color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
+                        emissive: Math.random() > 0.5 ? 0xff6666 : 0xaaaaaa,
+                        emissiveIntensity: 1
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(
+                        camera.position.x + (Math.random() - 0.5) * 150,
+                        camera.position.y + (Math.random() - 0.5) * 150,
+                        camera.position.z + (Math.random() - 0.5) * 150
+                    );
+                    mesh.userData = { pulse: Math.random() * Math.PI * 2 };
+                    scene.add(mesh);
+                    texts.push(mesh);
+                });
+            });
+
+            const particleGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+            for (let i = 0; i < 50; // Giảm nửa
+            i++) {
+                const material = new THREE.MeshPhongMaterial({
+                    color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
+                    emissive: Math.random() > 0.5 ? 0xff6666 : 0xaaaaaa,
+                    emissiveIntensity: 0.8,
+                    transparent: true,
+                    opacity: 0.8,
+                    specular: 0x555555,
+                    shininess: 30
+                });
+                const particle = new THREE.Mesh(particleGeometry, material);
+                particle.position.set(
+                    camera.position.x + (Math.random() - 0.5) * 150,
+                    camera.position.y + (Math.random() - 0.5) * 150,
+                    camera.position.z + (Math.random() - 0.5) * 150
+                );
+                particle.userData = { 
+                    velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
+                    pulse: Math.random() * Math.PI * 2
+                };
+                scene.add(particle);
+                particles.push(particle);
+            }
+
+            const dustGeometry = new THREE.BufferGeometry();
+            const dustVertices = [];
+            const dustCount = 250; // Giảm nửa
+            for (let i = 0; i < dustCount; i++) {
+                dustVertices.push(
+                    camera.position.x + (Math.random() - 0.5) * 150,
+                    camera.position.y + (Math.random() - 0.5) * 150,
+                    camera.position.z + (Math.random() - 0.5) * 150
+                );
+            }
+            dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
+            const dustMaterial = new THREE.PointsMaterial({
+                color: Math.random() > 0.5 ? 0xffffff : 0xff6666,
+                size: 0.08,
+                map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/glow.png'),
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            const dust = new THREE.Points(dustGeometry, dustMaterial);
+            scene.add(dust);
+            dust.userData = {
+                velocities: Array(dustCount).fill().map(() => new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.01,
+                    (Math.random() - 0.5) * 0.01,
+                    (Math.random() - 0.5) * 0.01
+                ))
+            };
+            dustParticles.push(dust);
+
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.getElementById('start-button').addEventListener('click', startExperience);
+
+            if (isMobile) {
+                renderer.domElement.addEventListener('touchstart', onTouchStart);
+                renderer.domElement.addEventListener('touchmove', onTouchMove);
+                renderer.domElement.addEventListener('touchend', onTouchEnd);
+            }
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function startExperience() {
+            document.getElementById('info-screen').style.display = 'none';
+            controls.enabled = true;
+            if (!isMobile) {
+                controls.lock();
+            }
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': moveUp = true; break;
+                case 'Space': moveDown = true; break;
+                case 'Escape': controls.unlock(); break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': moveUp = false; break;
+                case 'Space': moveDown = false; break;
+            }
+        }
+
+        function onTouchStart(event) {
+            if (event.touches.length === 1) {
+                isDragging = true;
+                touchStartX = event.touches[0].clientX;
+                touchStartY = event.touches[0].clientY;
+                moveStartX = touchStartX;
+                moveStartY = touchStartY;
+            } else if (event.touches.length === 2) {
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                touchStartDistance = Math.sqrt(dx * dx + dy * dy);
+            }
+        }
+
+        function onTouchMove(event) {
+            if (event.touches.length === 1 && isDragging) {
+                const touch = event.touches[0];
+                const deltaX = touch.clientX - touchStartX;
+                const deltaY = touch.clientY - touchStartY;
+                controls.getObject().rotation.y -= deltaX * 0.005;
+                controls.getObject().rotation.x -= deltaY * 0.005;
+                controls.getObject().rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, controls.getObject().rotation.x));
+
+                const moveDeltaX = touch.clientX - moveStartX;
+                const moveDeltaY = touch.clientY - moveStartY;
+                const moveSpeed = 0.1;
+                const forward = new THREE.Vector3(0, 0, -moveDeltaY).applyQuaternion(camera.quaternion);
+                const right = new THREE.Vector3(moveDeltaX, 0, 0).applyQuaternion(camera.quaternion);
+                camera.position.add(forward.multiplyScalar(moveSpeed));
+                camera.position.add(right.multiplyScalar(moveSpeed));
+
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            } else if (event.touches.length === 2) {
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const delta = distance - touchStartDistance;
+                camera.fov -= delta * 0.05;
+                camera.fov = Math.max(30, Math.min(100, camera.fov));
+                camera.updateProjectionMatrix();
+                touchStartDistance = distance;
+            }
+        }
+
+        function onTouchEnd(event) {
+            isDragging = false;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function spawnTextNearCamera() {
+            if (!font || texts.length >= maxTexts) return;
+            const text = romanticWords[Math.floor(Math.random() * romanticWords.length)];
+            const geometry = new THREE.TextGeometry(text, {
+                font: font,
+                size: 1.2,
+                height: 0.12,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.03,
+                bevelSize: 0.03,
+                bevelOffset: 0,
+                bevelSegments: 3
+            });
+            const material = new THREE.MeshPhongMaterial({
+                color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
+                emissive: Math.random() > 0.5 ? 0xff6666 : 0xaaaaaa,
+                emissiveIntensity: 0.7
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(
+                camera.position.x + (Math.random() - 0.5) * 150,
+                camera.position.y + (Math.random() - 0.5) * 150,
+                camera.position.z + (Math.random() - 0.5) * 150
+            );
+            mesh.userData = { 
+                velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
+                pulse: Math.random() * Math.PI * 2
+            };
+            scene.add(mesh);
+            texts.push(mesh);
+        }
+
+        function spawnParticleAtCamera() {
+            if (particles.length >= maxParticles) return;
+            const material = new THREE.MeshPhongMaterial({
+                color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
+                emissive: Math.random() > 0.5 ? 0xff6666 : 0xaaaaaa,
+                emissiveIntensity: 0.8,
+                transparent: true,
+                opacity: 0.8,
+                specular: 0x555555,
+                shininess: 30
+            });
+            const particle = new THREE.Mesh(new THREE.SphereGeometry(0.25, 32, 32), material);
+            
+            const radius = 100;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI;
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+            
+            particle.position.copy(camera.position);
+            particle.position.add(new THREE.Vector3(x, y, z));
+            particle.userData = { 
+                velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
+                pulse: Math.random() * Math.PI * 2
+            };
+            scene.add(particle);
+            particles.push(particle);
+        }
+
+        function spawnDustNearCamera() {
+            if (dustParticles.length >= maxDustGroups) return;
+            const dustGeometry = new THREE.BufferGeometry();
+            const dustVertices = [];
+            const dustCount = 100;
+            for (let i = 0; i < dustCount; i++) {
+                dustVertices.push(
+                    camera.position.x + (Math.random() - 0.5) * 150,
+                    camera.position.y + (Math.random() - 0.5) * 150,
+                    camera.position.z + (Math.random() - 0.5) * 150
+                );
+            }
+            dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
+            const dustMaterial = new THREE.PointsMaterial({
+                color: Math.random() > 0.5 ? 0xffffff : 0xff6666,
+                size: 0.08,
+                map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/glow.png'),
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            const dust = new THREE.Points(dustGeometry, dustMaterial);
+            scene.add(dust);
+            dust.userData = {
+                velocities: Array(dustCount).fill().map(() => new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.01,
+                    (Math.random() - 0.5) * 0.01,
+                    (Math.random() - 0.5) * 0.01
+                ))
+            };
+            dustParticles.push(dust);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+
+            // Sinh chữ, tăng gấp 5, tối ưu
+            let textCount = 0;
+            if (Math.random() < 2.5 && texts.length < maxTexts && textCount < 5) {
+                spawnTextNearCamera();
+                textCount++;
+            }
+            // Sinh hạt
+            let particleCount = 0;
+            if (((moveForward || moveBackward || moveLeft || moveRight || moveUp || moveDown) && time - lastParticleTime > 10) || Math.random() < 0.25) {
+                if (particles.length < maxParticles && particleCount < 5) {
+                    spawnParticleAtCamera();
+                    lastParticleTime = time;
+                    particleCount++;
+                }
+            }
+            if (Math.random() < 0.3 && dustParticles.length < maxDustGroups) {
+                spawnDustNearCamera();
+            }
+
+            // Cập nhật hạt
+            particles.forEach(particle => {
+                particle.position.add(particle.userData.velocity);
+                const pulse = Math.sin(time * 0.001 + particle.userData.pulse) * 0.2 + 0.8;
+                particle.material.opacity = pulse;
+                if (particle.position.distanceTo(camera.position) > 600) {
+                    scene.remove(particle);
+                    particles = particles.filter(p => p !== particle);
+                }
+            });
+
+            // Cập nhật chữ
+            texts.forEach((text, index) => {
+                if (index >= 3) {
+                    text.position.add(text.userData.velocity);
+                    const pulse = Math.sin(time * 0.001 + text.userData.pulse) * 0.2 + 0.8;
+                    text.material.opacity = pulse;
+                    if (text.position.distanceTo(camera.position) > 600) {
+                        scene.remove(text);
+                        texts = texts.filter(t => t !== text);
+                    }
+                }
+            });
+
+            // Cập nhật bụi
+            dustParticles = dustParticles.filter(dust => {
+                const positions = dust.geometry.attributes.position.array;
+                const velocities = dust.userData.velocities;
+                let keep = false;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += velocities[i / 3].x;
+                    positions[i + 1] += velocities[i / 3].y;
+                    positions[i + 2] += velocities[i / 3].z;
+                    if (new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]).distanceTo(camera.position) <= 600) {
+                        keep = true;
+                    }
+                }
+                dust.geometry.attributes.position.needsUpdate = true;
+                if (!keep) {
+                    scene.remove(dust);
+                    return false;
+                }
+                return true;
+            });
+
+            // Điều khiển desktop
+            if (!isMobile) {
+                velocity.x *= 0.9;
+                velocity.y *= 0.9;
+                velocity.z *= 0.9;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.y = Number(moveUp) - Number(moveDown);
+                direction.normalize();
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+                if (moveUp || moveDown) velocity.y -= direction.y * 400.0 * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+                controls.getObject().position.y += velocity.y * delta;
+            }
+
+            renderer.render(scene, camera);
+            prevTime = time;
+        }
+
+        init();
+    </script>
+</body>
+</html>
