@@ -16,7 +16,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: rgb(12, 0, 36);
+            background: rgb(0, 0, 0);
             touch-action: none;
         }
         #info-screen {
@@ -58,7 +58,7 @@
             font-family: 'TF-Love-House', sans-serif;
         }
         #start-button:hover {
-            background: #ff6666;
+            background: #ff4040;
             transform: scale(1.1);
             box-shadow: 0 0 20px rgba(255, 255, 255, 0.9);
         }
@@ -71,7 +71,7 @@
             100% { transform: scale(1); }
         }
         #start-button {
-            animation: pulse 2s infinite;
+            animation: pulse 3s infinite;
         }
     </style>
 </head>
@@ -116,9 +116,9 @@
         const romanticWords = ['I', 'LOVE', 'YOU'];
         let font = null;
         let titleFont = null;
-        const maxParticles = 400;
+        const maxParticles = 500;
         const maxTexts = 500;
-        const maxDustGroups = 30;
+        const maxDustGroups = 300;
         const initialLoadTime = performance.now();
 
         function init() {
@@ -163,14 +163,14 @@
                 mainTexts.forEach((text, index) => {
                     const geometry = new THREE.TextGeometry(text, {
                         font: titleFont,
-                        size: 6.6,
-                        height: 0.88,
+                        size: 6.4,
+                        height: 0.32,
                         curveSegments: 12,
                         bevelEnabled: true,
-                        bevelThickness: 0.176,
+                        bevelThickness: 0.176,    
                         bevelSize: 0.132,
                         bevelOffset: 0,
-                        bevelSegments: 5
+                        bevelSegments: 5      //chữ đỏ
                     });
                     const material = new THREE.MeshPhongMaterial({
                         color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
@@ -179,9 +179,9 @@
                     });
                     const mesh = new THREE.Mesh(geometry, material);
                     mesh.position.set(
-                        camera.position.x + (Math.random() - 0.5) * 300,
-                        camera.position.y + (Math.random() - 0.5) * 300,
-                        camera.position.z + (Math.random() - 0.5) * 300
+                        camera.position.x + (Math.random() - 0.5) * 500,
+                        camera.position.y + (Math.random() - 0.5) * 500,
+                        camera.position.z + (Math.random() - 0.5) * 500
                     );
                     mesh.userData = { pulse: Math.random() * Math.PI * 2 };
                     scene.add(mesh);
@@ -209,17 +209,17 @@
                 const material = new THREE.MeshPhongMaterial({
                     color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
                     emissive: Math.random() > 0.5 ? 0xff6666 : 0xaaaaaa,
-                    emissiveIntensity: 0.8,
+                    emissiveIntensity: 0.7,
                     transparent: true,
-                    opacity: 0.8,
+                    opacity: 0.7,
                     specular: 0x555555,
-                    shininess: 30
+                    shininess: 32
                 });
                 const particle = new THREE.Mesh(particleGeometry, material);
                 particle.position.set(
-                    camera.position.x + (Math.random() - 0.5) * 300,
-                    camera.position.y + (Math.random() - 0.5) * 300,
-                    camera.position.z + (Math.random() - 0.5) * 300
+                    camera.position.x + (Math.random() - 0.5) * 500,
+                    camera.position.y + (Math.random() - 0.5) * 500, // hạt j đấy
+                    camera.position.z + (Math.random() - 0.5) * 500
                 );
                 particle.userData = { 
                     velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
@@ -234,9 +234,9 @@
             const dustCount = 1200;
             for (let i = 0; i < dustCount; i++) {
                 dustVertices.push(
-                    camera.position.x + (Math.random() - 0.5) * 300,
-                    camera.position.y + (Math.random() - 0.5) * 300,
-                    camera.position.z + (Math.random() - 0.5) * 300
+                    camera.position.x + (Math.random() - 0.5) * 500,
+                    camera.position.y + (Math.random() - 0.5) * 500,  //ko biết
+                    camera.position.z + (Math.random() - 0.5) * 500
                 );
             }
             dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
@@ -361,12 +361,13 @@
                 const deltaX = newTouchX - touchStartX;
                 const deltaY = newTouchY - touchStartY;
 
-                // Rotation with two fingers
+                
+                // Xoay bằng zoom hai ngón tay
                 controls.getObject().rotation.y -= deltaX * 0.005;
                 controls.getObject().rotation.x -= deltaY * 0.005;
                 controls.getObject().rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, controls.getObject().rotation.x));
 
-                // Vertical movement with pinch
+                // Di chuyển theo chiều dọc
                 const deltaPinch = distance - pinchStartDistance;
                 const moveSpeed = 0.5;
                 const up = new THREE.Vector3(0, deltaPinch, 0).applyQuaternion(camera.quaternion);
@@ -412,9 +413,9 @@
             });
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(
-                camera.position.x + (Math.random() - 0.5) * 300,
-                camera.position.y + (Math.random() - 0.5) * 300,
-                camera.position.z + (Math.random() - 0.5) * 300
+                camera.position.x + (Math.random() - 0.5) * 350,
+                camera.position.y + (Math.random() - 0.5) * 350,  //Khoảng cách chữ
+                camera.position.z + (Math.random() - 0.5) * 350
             );
             mesh.userData = { 
                 velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, -0.05, (Math.random() - 0.5) * 0.02),
@@ -461,9 +462,9 @@
             const dustCount = 600;
             for (let i = 0; i < dustCount; i++) {
                 dustVertices.push(
-                    camera.position.x + (Math.random() - 0.5) * 300,
-                    camera.position.y + (Math.random() - 0.5) * 300,
-                    camera.position.z + (Math.random() - 0.5) * 300
+                    camera.position.x + (Math.random() - 0.5) * 900,
+                    camera.position.y + (Math.random() - 0.5) * 900,
+                    camera.position.z + (Math.random() - 0.5) * 900
                 );
             }
             dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
