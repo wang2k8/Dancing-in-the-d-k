@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Dancing in the Dảk</title>
     <style>
         @font-face {
@@ -16,6 +16,7 @@
             height: 100%;
             overflow: hidden;
             background: rgb(12, 0, 36);
+            touch-action: none;
         }
         #info-screen {
             position: absolute;
@@ -84,10 +85,11 @@
         <p>Ctrl: Tăng tốc độ</p>
         <p>ESC: Thoát</p>
         <p><strong>Điện thoại:</strong></p>
-        <p>Vuốt: Xoay góc nhìn</p>
-        <p>Chụm: Tiến/lùi</p>
-        <p>Kéo trái/phải: Sang trái/phải</p>
-        <p>Kéo lên/xuống: Lên/xuống</p>
+        <p>1 ngón vuốt trái/phải: Sang trái/phải</p>
+        <p>1 ngón vuốt lên/xuống: Tiến/lùi</p>
+        <p>2 ngón vuốt trái/phải: Xoay ngang</p>
+        <p>2 ngón vuốt lên/xuống: Xoay dọc</p>
+        <p>Chụm: Lên/xuống</p>
         <button id="start-button">Click</button>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
@@ -106,8 +108,9 @@
         let texts = [];
         let dustParticles = [];
         let isMobile = /Mobi|Android/i.test(navigator.userAgent);
-        let touchStartX, touchStartY, moveStartX, moveStartY, touchStartDistance;
+        let touchStartX, touchStartY, touchStartDistance, pinchStartDistance;
         let isDragging = false;
+        let isPinching = false;
         let lastParticleTime = 0;
         const romanticWords = ['I', 'LOVE', 'YOU'];
         let font = null;
@@ -127,7 +130,6 @@
             renderer.sortObjects = true;
             document.body.appendChild(renderer.domElement);
 
-            // Post-processing setup
             composer = new POSTPROCESSING.EffectComposer(renderer);
             composer.addPass(new POSTPROCESSING.RenderPass(scene, camera));
             const dofEffect = new POSTPROCESSING.DepthOfFieldEffect(camera, {
@@ -257,7 +259,6 @@
             };
             dustParticles.push(dust);
 
-            // Chặn phím tắt Ctrl
             document.addEventListener('keydown', (event) => {
                 if (event.ctrlKey && event.code !== 'ControlLeft' && event.code !== 'ControlRight') {
                     event.preventDefault();
@@ -265,7 +266,6 @@
                 }
             }, { capture: true });
 
-            // Cảnh báo khi đóng tab
             window.addEventListener('beforeunload', (event) => {
                 event.preventDefault();
                 event.returnValue = '';
@@ -321,52 +321,66 @@
         }
 
         function onTouchStart(event) {
+            event.preventDefault();
             if (event.touches.length === 1) {
                 isDragging = true;
                 touchStartX = event.touches[0].clientX;
                 touchStartY = event.touches[0].clientY;
-                moveStartX = touchStartX;
-                moveStartY = touchStartY;
             } else if (event.touches.length === 2) {
+                isDragging = false;
+                isPinching = true;
                 const dx = event.touches[0].clientX - event.touches[1].clientX;
                 const dy = event.touches[0].clientY - event.touches[1].clientY;
                 touchStartDistance = Math.sqrt(dx * dx + dy * dy);
+                pinchStartDistance = touchStartDistance;
+                touchStartX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+                touchStartY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
             }
         }
 
         function onTouchMove(event) {
+            event.preventDefault();
             if (event.touches.length === 1 && isDragging) {
                 const touch = event.touches[0];
                 const deltaX = touch.clientX - touchStartX;
                 const deltaY = touch.clientY - touchStartY;
+                const moveSpeed = 0.1;
+                const forward = new THREE.Vector3(0, 0, -deltaY).applyQuaternion(camera.quaternion);
+                const right = new THREE.Vector3(deltaX, 0, 0).applyQuaternion(camera.quaternion);
+                camera.position.add(forward.multiplyScalar(moveSpeed));
+                camera.position.add(right.multiplyScalar(moveSpeed));
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            } else if (event.touches.length === 2 && isPinching) {
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const newTouchX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+                const newTouchY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+                const deltaX = newTouchX - touchStartX;
+                const deltaY = newTouchY - touchStartY;
+
+                // Rotation with two fingers
                 controls.getObject().rotation.y -= deltaX * 0.005;
                 controls.getObject().rotation.x -= deltaY * 0.005;
                 controls.getObject().rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, controls.getObject().rotation.x));
 
-                const moveDeltaX = touch.clientX - moveStartX;
-                const moveDeltaY = touch.clientY - moveStartY;
-                const moveSpeed = 0.1;
-                const right = new THREE.Vector3(moveDeltaX, 0, 0).applyQuaternion(camera.quaternion);
-                const up = new THREE.Vector3(0, -moveDeltaY, 0).applyQuaternion(camera.quaternion);
-                camera.position.add(right.multiplyScalar(moveSpeed));
+                // Vertical movement with pinch
+                const deltaPinch = distance - pinchStartDistance;
+                const moveSpeed = 0.5;
+                const up = new THREE.Vector3(0, deltaPinch, 0).applyQuaternion(camera.quaternion);
                 camera.position.add(up.multiplyScalar(moveSpeed));
 
-                touchStartX = touch.clientX;
-                touchStartY = touch.clientY;
-            } else if (event.touches.length === 2) {
-                const dx = event.touches[0].clientX - event.touches[1].clientX;
-                const dy = event.touches[0].clientY - event.touches[1].clientY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const delta = distance - touchStartDistance;
-                const moveSpeed = 0.5;
-                const forward = new THREE.Vector3(0, 0, -delta).applyQuaternion(camera.quaternion);
-                camera.position.add(forward.multiplyScalar(moveSpeed));
-                touchStartDistance = distance;
+                touchStartX = newTouchX;
+                touchStartY = newTouchY;
+                pinchStartDistance = distance;
             }
         }
 
         function onTouchEnd(event) {
+            event.preventDefault();
             isDragging = false;
+            isPinching = false;
         }
 
         function onWindowResize() {
@@ -479,7 +493,6 @@
             const time = performance.now();
             const delta = (time - prevTime) / 1000;
 
-            // Sinh chữ và bụi, tăng tốc độ khi mới load
             const isInitialLoad = time < initialLoadTime + 5000;
             const textSpawnChance = isInitialLoad ? 0.5 : 0.2;
             const dustSpawnChance = isInitialLoad ? 0.9 : 0.5;
@@ -488,7 +501,6 @@
                 spawnTextNearCamera();
                 textCount++;
             }
-            // Sinh hạt
             let particleCount = 0;
             if (((moveForward || moveBackward || moveLeft || moveRight || moveUp || moveDown) && time - lastParticleTime > 10) || Math.random() < 0.25) {
                 if (particles.length < maxParticles && particleCount < 5) {
@@ -497,12 +509,10 @@
                     particleCount++;
                 }
             }
-            // Sinh bụi
             if (Math.random() < dustSpawnChance && dustParticles.length < maxDustGroups) {
                 spawnDustNearCamera();
             }
 
-            // Cập nhật hạt
             particles.forEach(particle => {
                 particle.position.add(particle.userData.velocity);
                 const pulse = Math.sin(time * 0.001 + particle.userData.pulse) * 0.2 + 0.8;
@@ -513,7 +523,6 @@
                 }
             });
 
-            // Cập nhật chữ
             texts.forEach((text, index) => {
                 if (index >= 3) {
                     text.position.add(text.userData.velocity);
@@ -526,7 +535,6 @@
                 }
             });
 
-            // Cập nhật bụi
             dustParticles = dustParticles.filter(dust => {
                 const positions = dust.geometry.attributes.position.array;
                 const velocities = dust.userData.velocities;
@@ -548,7 +556,6 @@
                 return true;
             });
 
-            // Điều khiển desktop
             if (!isMobile) {
                 velocity.x *= 0.9;
                 velocity.y *= 0.9;
