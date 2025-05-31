@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dancing in the dảk</title>
+    <title>Dancing in the Dảk</title>
     <style>
+        @font-face {
+            font-family: 'TF-Love-House';
+            src: url('./TF-Love-House-j77u3e.otf') format('opentype');
+        }
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: black;
+            background: rgb(12, 0, 36);
         }
         #info-screen {
             position: absolute;
@@ -26,16 +30,16 @@
             justify-content: center;
             align-items: center;
             text-align: center;
-            font-family: 'Arial', sans-serif;
+            font-family: 'TF-Love-House', sans-serif;
             z-index: 1000;
         }
         #info-screen h1 {
-            font-size: 2em;
+            font-size: 2.5em;
             margin-bottom: 15px;
             text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
         }
         #info-screen p {
-            font-size: 1em;
+            font-size: 1.2em;
             margin: 8px;
             text-shadow: 0 0 5px rgba(255, 77, 77, 0.8);
         }
@@ -49,6 +53,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 0 15px rgba(255, 77, 77, 0.7);
+            font-family: 'TF-Love-House', sans-serif;
         }
         #start-button:hover {
             background: #ff6666;
@@ -70,26 +75,30 @@
 </head>
 <body>
     <div id="info-screen">
-        <h1>Dancing in the dảk</h1>
-        <p><strong>Điều khiển máy tính:</strong></p>
+        <h1>Dancing in the Dảk</h1>
+        <p><strong>Máy tính:</strong></p>
         <p>Chuột: Xoay góc nhìn</p>
         <p>W/A/S/D: Di chuyển</p>
-        <p>Shift: Bay suống</p>
-        <p>Space: Bay lên</p>
+        <p>Shift: Bay lên</p>
+        <p>Space: Bay xuống</p>
+        <p>Ctrl: Tăng tốc độ</p>
         <p>ESC: Thoát</p>
-        <p><strong>Điều khiển điện thoại:</strong></p>
-        <p>Vuốt: Xoay chế độ xem</p>
-        <p>Chụm: Thu phóng</p>
-        <p>Kéo: Di chuyển</p>
+        <p><strong>Điện thoại:</strong></p>
+        <p>Vuốt: Xoay góc nhìn</p>
+        <p>Chụm: Tiến/lùi</p>
+        <p>Kéo trái/phải: Sang trái/phải</p>
+        <p>Kéo lên/xuống: Lên/xuống</p>
         <button id="start-button">Click</button>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/FontLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/postprocessing@6.23.2/build/postprocessing.min.js"></script>
     <script>
-        let scene, camera, renderer, controls;
+        let scene, camera, renderer, controls, composer;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
+        let isCtrlPressed = false;
         let velocity = new THREE.Vector3();
         let direction = new THREE.Vector3();
         let prevTime = performance.now();
@@ -100,13 +109,13 @@
         let touchStartX, touchStartY, moveStartX, moveStartY, touchStartDistance;
         let isDragging = false;
         let lastParticleTime = 0;
-        const romanticWords = [
-            'I', 'LOVE', 'YOU',
-        ];
+        const romanticWords = ['I', 'LOVE', 'YOU'];
         let font = null;
-        const maxParticles = 400; // Giảm nửa
-        const maxTexts = 500; // Tăng gấp 5
-        const maxDustGroups = 20;
+        let titleFont = null;
+        const maxParticles = 400;
+        const maxTexts = 500;
+        const maxDustGroups = 30;
+        const initialLoadTime = performance.now();
 
         function init() {
             scene = new THREE.Scene();
@@ -117,6 +126,17 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.sortObjects = true;
             document.body.appendChild(renderer.domElement);
+
+            // Post-processing setup
+            composer = new POSTPROCESSING.EffectComposer(renderer);
+            composer.addPass(new POSTPROCESSING.RenderPass(scene, camera));
+            const dofEffect = new POSTPROCESSING.DepthOfFieldEffect(camera, {
+                focalLength: 50,
+                bokehScale: 5.0,
+                height: window.innerHeight
+            });
+            const effectPass = new POSTPROCESSING.EffectPass(camera, dofEffect);
+            composer.addPass(effectPass);
 
             const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
             scene.add(ambientLight);
@@ -134,18 +154,18 @@
             });
 
             const loader = new THREE.FontLoader();
-            loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', function (loadedFont) {
-                font = loadedFont;
+
+            function createMainTexts() {
                 const mainTexts = ['I', 'LOVE', 'YOU'];
                 mainTexts.forEach((text, index) => {
                     const geometry = new THREE.TextGeometry(text, {
-                        font: font,
-                        size: 2.0,
-                        height: 0.2,
+                        font: titleFont,
+                        size: 6.6,
+                        height: 0.88,
                         curveSegments: 12,
                         bevelEnabled: true,
-                        bevelThickness: 0.04,
-                        bevelSize: 0.04,
+                        bevelThickness: 0.176,
+                        bevelSize: 0.132,
                         bevelOffset: 0,
                         bevelSegments: 5
                     });
@@ -156,19 +176,33 @@
                     });
                     const mesh = new THREE.Mesh(geometry, material);
                     mesh.position.set(
-                        camera.position.x + (Math.random() - 0.5) * 150,
-                        camera.position.y + (Math.random() - 0.5) * 150,
-                        camera.position.z + (Math.random() - 0.5) * 150
+                        camera.position.x + (Math.random() - 0.5) * 300,
+                        camera.position.y + (Math.random() - 0.5) * 300,
+                        camera.position.z + (Math.random() - 0.5) * 300
                     );
                     mesh.userData = { pulse: Math.random() * Math.PI * 2 };
                     scene.add(mesh);
                     texts.push(mesh);
                 });
+            }
+
+            loader.load('./KD-Yon-Love.ttf', function (loadedFont) {
+                titleFont = loadedFont;
+                createMainTexts();
+            }, undefined, function (error) {
+                console.error('Lỗi tải font KD-Yon-Love.ttf:', error);
+                loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', function (loadedFont) {
+                    titleFont = loadedFont;
+                    createMainTexts();
+                });
+            });
+
+            loader.load('https://threejs.org/examples/fonts/helvetiker_bold.typeface.json', function (loadedFont) {
+                font = loadedFont;
             });
 
             const particleGeometry = new THREE.SphereGeometry(0.25, 32, 32);
-            for (let i = 0; i < 50; // Giảm nửa
-            i++) {
+            for (let i = 0; i < 50; i++) {
                 const material = new THREE.MeshPhongMaterial({
                     color: Math.random() > 0.5 ? 0xff4d4d : 0xffffff,
                     emissive: Math.random() > 0.5 ? 0xff6666 : 0xaaaaaa,
@@ -180,9 +214,9 @@
                 });
                 const particle = new THREE.Mesh(particleGeometry, material);
                 particle.position.set(
-                    camera.position.x + (Math.random() - 0.5) * 150,
-                    camera.position.y + (Math.random() - 0.5) * 150,
-                    camera.position.z + (Math.random() - 0.5) * 150
+                    camera.position.x + (Math.random() - 0.5) * 300,
+                    camera.position.y + (Math.random() - 0.5) * 300,
+                    camera.position.z + (Math.random() - 0.5) * 300
                 );
                 particle.userData = { 
                     velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
@@ -194,20 +228,21 @@
 
             const dustGeometry = new THREE.BufferGeometry();
             const dustVertices = [];
-            const dustCount = 250; // Giảm nửa
+            const dustCount = 1200;
             for (let i = 0; i < dustCount; i++) {
                 dustVertices.push(
-                    camera.position.x + (Math.random() - 0.5) * 150,
-                    camera.position.y + (Math.random() - 0.5) * 150,
-                    camera.position.z + (Math.random() - 0.5) * 150
+                    camera.position.x + (Math.random() - 0.5) * 300,
+                    camera.position.y + (Math.random() - 0.5) * 300,
+                    camera.position.z + (Math.random() - 0.5) * 300
                 );
             }
             dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
             const dustMaterial = new THREE.PointsMaterial({
                 color: Math.random() > 0.5 ? 0xffffff : 0xff6666,
-                size: 0.08,
+                size: 0.24,
                 map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/glow.png'),
                 transparent: true,
+                opacity: 0.9,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
             });
@@ -216,11 +251,25 @@
             dust.userData = {
                 velocities: Array(dustCount).fill().map(() => new THREE.Vector3(
                     (Math.random() - 0.5) * 0.01,
-                    (Math.random() - 0.5) * 0.01,
+                    -0.03,
                     (Math.random() - 0.5) * 0.01
                 ))
             };
             dustParticles.push(dust);
+
+            // Chặn phím tắt Ctrl
+            document.addEventListener('keydown', (event) => {
+                if (event.ctrlKey && event.code !== 'ControlLeft' && event.code !== 'ControlRight') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }, { capture: true });
+
+            // Cảnh báo khi đóng tab
+            window.addEventListener('beforeunload', (event) => {
+                event.preventDefault();
+                event.returnValue = '';
+            });
 
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
@@ -252,6 +301,8 @@
                 case 'KeyD': moveRight = true; break;
                 case 'ShiftLeft': moveUp = true; break;
                 case 'Space': moveDown = true; break;
+                case 'ControlLeft':
+                case 'ControlRight': isCtrlPressed = true; break;
                 case 'Escape': controls.unlock(); break;
             }
         }
@@ -264,6 +315,8 @@
                 case 'KeyD': moveRight = false; break;
                 case 'ShiftLeft': moveUp = false; break;
                 case 'Space': moveDown = false; break;
+                case 'ControlLeft':
+                case 'ControlRight': isCtrlPressed = false; break;
             }
         }
 
@@ -293,10 +346,10 @@
                 const moveDeltaX = touch.clientX - moveStartX;
                 const moveDeltaY = touch.clientY - moveStartY;
                 const moveSpeed = 0.1;
-                const forward = new THREE.Vector3(0, 0, -moveDeltaY).applyQuaternion(camera.quaternion);
                 const right = new THREE.Vector3(moveDeltaX, 0, 0).applyQuaternion(camera.quaternion);
-                camera.position.add(forward.multiplyScalar(moveSpeed));
+                const up = new THREE.Vector3(0, -moveDeltaY, 0).applyQuaternion(camera.quaternion);
                 camera.position.add(right.multiplyScalar(moveSpeed));
+                camera.position.add(up.multiplyScalar(moveSpeed));
 
                 touchStartX = touch.clientX;
                 touchStartY = touch.clientY;
@@ -305,9 +358,9 @@
                 const dy = event.touches[0].clientY - event.touches[1].clientY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 const delta = distance - touchStartDistance;
-                camera.fov -= delta * 0.05;
-                camera.fov = Math.max(30, Math.min(100, camera.fov));
-                camera.updateProjectionMatrix();
+                const moveSpeed = 0.5;
+                const forward = new THREE.Vector3(0, 0, -delta).applyQuaternion(camera.quaternion);
+                camera.position.add(forward.multiplyScalar(moveSpeed));
                 touchStartDistance = distance;
             }
         }
@@ -320,6 +373,7 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
         }
 
         function spawnTextNearCamera() {
@@ -327,12 +381,12 @@
             const text = romanticWords[Math.floor(Math.random() * romanticWords.length)];
             const geometry = new THREE.TextGeometry(text, {
                 font: font,
-                size: 1.2,
-                height: 0.12,
+                size: 4.0,
+                height: 0.528,
                 curveSegments: 12,
                 bevelEnabled: true,
-                bevelThickness: 0.03,
-                bevelSize: 0.03,
+                bevelThickness: 0.132,
+                bevelSize: 0.099,
                 bevelOffset: 0,
                 bevelSegments: 3
             });
@@ -343,12 +397,12 @@
             });
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(
-                camera.position.x + (Math.random() - 0.5) * 150,
-                camera.position.y + (Math.random() - 0.5) * 150,
-                camera.position.z + (Math.random() - 0.5) * 150
+                camera.position.x + (Math.random() - 0.5) * 300,
+                camera.position.y + (Math.random() - 0.5) * 300,
+                camera.position.z + (Math.random() - 0.5) * 300
             );
             mesh.userData = { 
-                velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
+                velocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, -0.05, (Math.random() - 0.5) * 0.02),
                 pulse: Math.random() * Math.PI * 2
             };
             scene.add(mesh);
@@ -389,20 +443,21 @@
             if (dustParticles.length >= maxDustGroups) return;
             const dustGeometry = new THREE.BufferGeometry();
             const dustVertices = [];
-            const dustCount = 100;
+            const dustCount = 600;
             for (let i = 0; i < dustCount; i++) {
                 dustVertices.push(
-                    camera.position.x + (Math.random() - 0.5) * 150,
-                    camera.position.y + (Math.random() - 0.5) * 150,
-                    camera.position.z + (Math.random() - 0.5) * 150
+                    camera.position.x + (Math.random() - 0.5) * 300,
+                    camera.position.y + (Math.random() - 0.5) * 300,
+                    camera.position.z + (Math.random() - 0.5) * 300
                 );
             }
             dustGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
             const dustMaterial = new THREE.PointsMaterial({
                 color: Math.random() > 0.5 ? 0xffffff : 0xff6666,
-                size: 0.08,
+                size: 0.24,
                 map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/glow.png'),
                 transparent: true,
+                opacity: 0.9,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
             });
@@ -411,7 +466,7 @@
             dust.userData = {
                 velocities: Array(dustCount).fill().map(() => new THREE.Vector3(
                     (Math.random() - 0.5) * 0.01,
-                    (Math.random() - 0.5) * 0.01,
+                    -0.03,
                     (Math.random() - 0.5) * 0.01
                 ))
             };
@@ -424,9 +479,12 @@
             const time = performance.now();
             const delta = (time - prevTime) / 1000;
 
-            // Sinh chữ, tăng gấp 5, tối ưu
+            // Sinh chữ và bụi, tăng tốc độ khi mới load
+            const isInitialLoad = time < initialLoadTime + 5000;
+            const textSpawnChance = isInitialLoad ? 0.5 : 0.2;
+            const dustSpawnChance = isInitialLoad ? 0.9 : 0.5;
             let textCount = 0;
-            if (Math.random() < 2.5 && texts.length < maxTexts && textCount < 5) {
+            if (Math.random() < textSpawnChance && texts.length < maxTexts && textCount < 5) {
                 spawnTextNearCamera();
                 textCount++;
             }
@@ -439,7 +497,8 @@
                     particleCount++;
                 }
             }
-            if (Math.random() < 0.3 && dustParticles.length < maxDustGroups) {
+            // Sinh bụi
+            if (Math.random() < dustSpawnChance && dustParticles.length < maxDustGroups) {
                 spawnDustNearCamera();
             }
 
@@ -448,7 +507,7 @@
                 particle.position.add(particle.userData.velocity);
                 const pulse = Math.sin(time * 0.001 + particle.userData.pulse) * 0.2 + 0.8;
                 particle.material.opacity = pulse;
-                if (particle.position.distanceTo(camera.position) > 600) {
+                if (particle.position.distanceTo(camera.position) > 600 || particle.position.y < camera.position.y - 600) {
                     scene.remove(particle);
                     particles = particles.filter(p => p !== particle);
                 }
@@ -460,7 +519,7 @@
                     text.position.add(text.userData.velocity);
                     const pulse = Math.sin(time * 0.001 + text.userData.pulse) * 0.2 + 0.8;
                     text.material.opacity = pulse;
-                    if (text.position.distanceTo(camera.position) > 600) {
+                    if (text.position.distanceTo(camera.position) > 600 || text.position.y < camera.position.y - 600) {
                         scene.remove(text);
                         texts = texts.filter(t => t !== text);
                     }
@@ -476,7 +535,8 @@
                     positions[i] += velocities[i / 3].x;
                     positions[i + 1] += velocities[i / 3].y;
                     positions[i + 2] += velocities[i / 3].z;
-                    if (new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]).distanceTo(camera.position) <= 600) {
+                    if (new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]).distanceTo(camera.position) <= 600 &&
+                        positions[i + 1] > camera.position.y - 600) {
                         keep = true;
                     }
                 }
@@ -503,12 +563,13 @@
                 if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
                 if (moveUp || moveDown) velocity.y -= direction.y * 400.0 * delta;
 
-                controls.moveRight(-velocity.x * delta);
-                controls.moveForward(-velocity.z * delta);
-                controls.getObject().position.y += velocity.y * delta;
+                const speedMultiplier = isCtrlPressed ? 2.0 : 1.0;
+                controls.moveRight(-velocity.x * delta * speedMultiplier);
+                controls.moveForward(-velocity.z * delta * speedMultiplier);
+                controls.getObject().position.y += velocity.y * delta * speedMultiplier;
             }
 
-            renderer.render(scene, camera);
+            composer.render();
             prevTime = time;
         }
 
